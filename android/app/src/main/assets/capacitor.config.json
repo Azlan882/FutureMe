@@ -1,0 +1,9 @@
+{
+	"appId": "app.futureme.ai",
+	"appName": "FutureMe",
+	"webDir": "dist",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https"
+	}
+}
