@@ -1,0 +1,7 @@
+{
+  "name": "FutureMe",
+  "description": "AI visualization of how you might look in the future based on your current lifestyle habits.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
