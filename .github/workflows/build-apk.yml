@@ -39,6 +39,10 @@ jobs:
           if [ ! -d "android" ]; then
             npx cap add android
           fi
+          if [ ! -f "android/variables.gradle" ]; then
+            echo "Ensuring variables.gradle exists from Capacitor template"
+            tar -xzf node_modules/@capacitor/cli/assets/android-template.tar.gz -C android variables.gradle 2>/dev/null || true
+          fi
           npx cap sync android
 
       - name: Ensure Android Camera & Storage Permissions
