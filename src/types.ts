@@ -24,7 +24,8 @@ export type FlowStep =
   | 'questions'
   | 'age'
   | 'generating'
-  | 'results';
+  | 'results'
+  | 'error';
 
 export interface VisualImpactFactor {
   title: string;

@@ -10,10 +10,11 @@ interface GeneratingScreenProps {
 }
 
 const MESSAGES = [
-  'Analyzing your photo…',
-  'Considering your lifestyle…',
-  'Creating your future self…',
-  'Almost there…',
+  'Creating your future...',
+  'Analyzing facial landmarks & identity…',
+  'Correlating lifestyle habit factors…',
+  'Rendering photorealistic future projection…',
+  'Almost ready…',
 ];
 
 const STEPS = [

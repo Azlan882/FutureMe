@@ -6,8 +6,8 @@ import { QuestionsScreen } from './components/QuestionsScreen';
 import { AgeSelectionScreen } from './components/AgeSelectionScreen';
 import { GeneratingScreen } from './components/GeneratingScreen';
 import { ResultsScreen } from './components/ResultsScreen';
+import { ErrorScreen } from './components/ErrorScreen';
 import { FlowStep, FutureAge, LifestyleHabits, GenerationResult } from './types';
-import { generateClientAgedImage } from './utils/imageAging';
 import { calculateImpactFactors } from './utils/lifestyleImpacts';
 
 const INITIAL_HABITS: LifestyleHabits = {
@@ -20,19 +20,48 @@ const INITIAL_HABITS: LifestyleHabits = {
   alcohol: 'occasionally',
 };
 
+// Determine backend API URL (supports both web and native Capacitor on Android)
+const getApiBaseUrl = (): string => {
+  // If explicitly provided via VITE_API_URL (e.g. injected during APK build)
+  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== '') {
+    return import.meta.env.VITE_API_URL.replace(/\/+$/, '');
+  }
+
+  // Check if running inside native Android/iOS Capacitor environment
+  const isCapacitorNative =
+    typeof (window as any).Capacitor !== 'undefined' &&
+    typeof (window as any).Capacitor.isNativePlatform === 'function' &&
+    (window as any).Capacitor.isNativePlatform();
+
+  if (isCapacitorNative) {
+    // When running inside the native APK, relative URLs (/api/...) will fail because
+    // the WebView runs on https://localhost. Default to the production Cloudflare Worker URL.
+    return 'https://futureme.m-shahraiz774.workers.dev';
+  }
+
+  // Same-origin relative path for Web (AI Studio preview or production web deployment)
+  return '';
+};
+
 export default function App() {
   const [step, setStep] = useState<FlowStep>('welcome');
   const [userImage, setUserImage] = useState<string | null>(null);
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [futureImage, setFutureImage] = useState<string | null>(null);
   const [habits, setHabits] = useState<LifestyleHabits>(INITIAL_HABITS);
   const [selectedAge, setSelectedAge] = useState<FutureAge>(20); // 20 years default
   const [result, setResult] = useState<GenerationResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const handleReset = () => {
     setStep('welcome');
     setUserImage(null);
+    setOriginalImage(null);
+    setFutureImage(null);
     setHabits(INITIAL_HABITS);
     setSelectedAge(20);
     setResult(null);
+    setErrorMessage('');
   };
 
   const handleHabitChange = <K extends keyof LifestyleHabits>(key: K, value: LifestyleHabits[K]) => {
@@ -46,69 +75,69 @@ export default function App() {
     if (!userImage) return;
 
     setStep('generating');
+    setErrorMessage('');
 
-    // Run generation with guaranteed minimum visual scan time for smooth UX
-    const minDelayPromise = new Promise((resolve) => setTimeout(resolve, 3800));
+    // Guaranteed minimum visual scanning animation duration for polished UX
+    const minDelayPromise = new Promise((resolve) => setTimeout(resolve, 2500));
+
+    const apiEndpoint = `${getApiBaseUrl()}/api/generate-future`;
+    console.log(`[FutureMe Client] Requesting AI image generation from: ${apiEndpoint}`);
 
     const generatePromise = (async (): Promise<string> => {
-      try {
-        const response = await fetch('/api/generate-future', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: userImage,
-            habits,
-            years: selectedAge,
-          }),
-        });
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: userImage,
+          habits,
+          years: selectedAge,
+        }),
+      });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.mode === 'gemini_ai' && data?.futureImage) {
-            return data.futureImage;
-          }
-        }
-      } catch (err) {
-        console.warn('Backend image endpoint notice, falling back to client synthesis:', err);
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.success || !data?.futureImage) {
+        const errorDetail =
+          data?.error || `Server responded with status ${response.status}: ${response.statusText}`;
+        console.error('[FutureMe Client] Gemini API generation error:', errorDetail);
+        throw new Error(errorDetail);
       }
 
-      // High-fidelity identity-preserving client synthesis
-      return await generateClientAgedImage(userImage, selectedAge, habits);
+      const returnedFutureImage = data.futureImage as string;
+
+      // CRITICAL CHECK: Verify the generated future image is NOT identical to original
+      if (returnedFutureImage === userImage) {
+        console.error('[FutureMe Client] Returned future image is identical to input image');
+        throw new Error('Generated image is identical to the original image. AI projection failed to alter facial features.');
+      }
+
+      return returnedFutureImage;
     })();
 
     try {
-      const [_, futureImageUrl] = await Promise.all([minDelayPromise, generatePromise]);
+      const [_, returnedFutureImage] = await Promise.all([minDelayPromise, generatePromise]);
 
       const impactFactors = calculateImpactFactors(habits, selectedAge);
 
+      // Explicitly maintain separate states
+      setOriginalImage(userImage);
+      setFutureImage(returnedFutureImage);
+
       setResult({
         originalImage: userImage,
-        futureImage: futureImageUrl,
+        futureImage: returnedFutureImage,
         years: selectedAge,
         habits,
         impactFactors,
-        summaryNote: `Visualization projected for ${selectedAge} years with lifestyle factors applied.`,
+        summaryNote: `AI visualization projected for +${selectedAge} years using Gemini image generation model.`,
       });
 
       setStep('results');
-    } catch (err) {
-      console.error('Generation failure:', err);
-      // Emergency fallback
-      try {
-        const fallbackUrl = await generateClientAgedImage(userImage, selectedAge, habits);
-        setResult({
-          originalImage: userImage,
-          futureImage: fallbackUrl,
-          years: selectedAge,
-          habits,
-          impactFactors: calculateImpactFactors(habits, selectedAge),
-          summaryNote: `Simulation completed.`,
-        });
-        setStep('results');
-      } catch {
-        alert('Could not process this image. Please try uploading a different photo.');
-        setStep('upload');
-      }
+    } catch (err: any) {
+      console.error('[FutureMe Client] Generation workflow caught error:', err);
+      const msg = err?.message || "Couldn't generate your future visualization. Please try again.";
+      setErrorMessage(msg);
+      setStep('error');
     }
   };
 
@@ -124,7 +153,10 @@ export default function App() {
         {step === 'upload' && (
           <UploadScreen
             selectedImage={userImage}
-            onImageSelected={(img) => setUserImage(img)}
+            onImageSelected={(img) => {
+              setUserImage(img);
+              setOriginalImage(img);
+            }}
             onContinue={() => setStep('questions')}
             onBack={() => setStep('welcome')}
           />
@@ -158,11 +190,19 @@ export default function App() {
           />
         )}
 
-        {step === 'results' && result && (
+        {step === 'results' && result && originalImage && futureImage && (
           <ResultsScreen
             result={result}
             onTryAnother={() => setStep('age')}
             onAdjustAge={() => setStep('age')}
+          />
+        )}
+
+        {step === 'error' && (
+          <ErrorScreen
+            errorMessage={errorMessage}
+            onRetry={handleStartGeneration}
+            onBack={() => setStep('age')}
           />
         )}
       </main>

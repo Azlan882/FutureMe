@@ -53,6 +53,59 @@ cd android
 
 ---
 
+## 🏗️ Architecture: Mobile APK → Secure Backend → Gemini API
+
+```text
+┌─────────────────────────┐         POST /api/generate-future          ┌─────────────────────────┐
+│       FutureMe APK      │ ─────────────────────────────────────────> │   FutureMe Backend      │
+│   (Android Capacitor)   │                                            │      (server.ts)        │
+│                         │ <───────────────────────────────────────── │                         │
+└─────────────────────────┘          Base64 Future Image               └────────────┬────────────┘
+                                                                                    │
+                                                                   Reads GEMINI_API_KEY from server env
+                                                                   (NEVER exposed to mobile APK)
+                                                                                    │
+                                                                                    ▼
+                                                                       ┌─────────────────────────┐
+                                                                       │     Google Gemini API   │
+                                                                       │   (Image Generation)    │
+                                                                       └─────────────────────────┘
+```
+
+### Security Guarantee
+- **`GEMINI_API_KEY`** is stored **only** in the backend's server environment. It is **never** prefixed with `VITE_`, never embedded in the client APK binary, and never committed to version control.
+- **`VITE_API_URL`** is the public HTTP/HTTPS URL of your deployed backend service (e.g. `https://futureme-backend-xyz.a.run.app`). The mobile APK uses this URL to send requests to `POST /api/generate-future`.
+
+---
+
+## 🚀 Simplest Backend Deployment (Google Cloud Run / Render)
+
+The backend (`server.ts`) is pre-bundled and includes a production-ready `Dockerfile`.
+
+### Option A: Google Cloud Run (Recommended - 1 Command)
+```bash
+# Deploy directly from source to Cloud Run:
+gcloud run deploy futureme-backend \
+  --source . \
+  --port 3000 \
+  --set-env-vars GEMINI_API_KEY=your_gemini_api_key_here \
+  --allow-unauthenticated
+```
+Cloud Run will output your live service URL (e.g., `https://futureme-backend-xyz.a.run.app`).
+
+### Option B: Render or Railway
+1. Push this repository to GitHub.
+2. In Render / Railway, create a new **Web Service** pointing to your repository (Docker runtime).
+3. Set the environment variable `GEMINI_API_KEY` in the service settings.
+4. Render / Railway will assign a public HTTPS URL (e.g., `https://futureme-backend.onrender.com`).
+
+### Connecting the APK:
+1. In your GitHub repository, go to **Settings** → **Secrets and variables** → **Actions**.
+2. Add a repository secret named **`VITE_API_URL`** with the value of your backend URL (e.g. `https://futureme-backend-xyz.a.run.app`).
+3. Re-run the **"Build Android APK"** GitHub Action to produce an APK wired directly to your secure backend!
+
+---
+
 ## ✨ Features
 
 - **Biometric & Lifestyle Questionnaire**: 7 factors modeled (sleep, sun, diet, exercise, stress, smoking, alcohol).

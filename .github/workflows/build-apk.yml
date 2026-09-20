@@ -32,6 +32,8 @@ jobs:
         run: npm ci
 
       - name: Build Web Application
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
       - name: Initialize & Sync Capacitor Android
