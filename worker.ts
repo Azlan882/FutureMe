@@ -91,31 +91,40 @@ export default {
     const pathname = url.pathname.replace(/\/+$/, '') || '/';
     const corsHeaders = getCorsHeaders(request);
 
-    // Route 1: API Health Check Endpoint (GET /api/health)
-    if (pathname === '/api/health') {
-      if (request.method === 'OPTIONS') {
-        return new Response(null, {
-          status: 204,
-          headers: corsHeaders,
-        });
-      }
-
-      return new Response(
-        JSON.stringify({
-          status: 'ok',
-          runtime: 'cloudflare-worker',
-          hasGeminiKey: Boolean(env.GEMINI_API_KEY),
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders,
-          },
+    // 1. Worker API Routes (Intercepted BEFORE static assets fallback)
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
+      // Route 1: API Health Check Endpoint (GET /api/health)
+      if (pathname === '/api/health') {
+        if (request.method === 'OPTIONS') {
+          return new Response(null, {
+            status: 204,
+            headers: corsHeaders,
+          });
         }
-      );
-    }
+
+        if (request.method === 'GET') {
+          return new Response(
+            JSON.stringify({
+              status: 'ok',
+              runtime: 'cloudflare-worker',
+              hasGeminiKey: Boolean(env.GEMINI_API_KEY),
+              timestamp: new Date().toISOString(),
+            }),
+            {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                ...corsHeaders,
+              },
+            }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: false, error: 'Method not allowed. Use GET.' }),
+          { status: 405, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
 
     // Route 2: Future Image Generation Endpoint (POST /api/generate-future)
     if (pathname === '/api/generate-future') {
@@ -335,15 +344,14 @@ Return a single generated future portrait.`;
       );
     }
 
-    // 3. Catch-all for unknown /api/ routes
-    if (url.pathname.startsWith('/api/')) {
+      // 3. Catch-all for unknown /api/* routes (Returns JSON 404, never index.html)
       return new Response(
-        JSON.stringify({ success: false, error: 'API route not found' }),
+        JSON.stringify({ success: false, error: `API route not found: ${url.pathname}` }),
         { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
-    // 4. Static frontend asset serving via Cloudflare Assets
+    // 2. Static frontend asset serving via Cloudflare Assets (Non-API requests only)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
