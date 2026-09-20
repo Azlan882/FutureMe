@@ -36,7 +36,7 @@ try {
 }
 async function startServer() {
   const app = (0, import_express.default)();
-  const PORT = 3e3;
+  const PORT = Number(process.env.DEFAULT_APP_PORT) || (process.env.PORT ? Number(process.env.PORT) : 3e3);
   app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
