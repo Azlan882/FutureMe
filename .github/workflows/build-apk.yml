@@ -33,7 +33,7 @@ jobs:
 
       - name: Build Web Application
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL != '' && secrets.VITE_API_URL || 'https://futureme.m-shahraiz774.workers.dev' }}
         run: npm run build
 
       - name: Initialize & Sync Capacitor Android
@@ -51,7 +51,10 @@ jobs:
         run: |
           MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST_FILE" ]; then
-            # Inject Camera and Media permissions if not already present
+            # Inject Internet, Camera, and Media permissions if not already present
+            if ! grep -q "android.permission.INTERNET" "$MANIFEST_FILE"; then
+              sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST_FILE"
+            fi
             if ! grep -q "android.permission.CAMERA" "$MANIFEST_FILE"; then
               sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />' "$MANIFEST_FILE"
             fi

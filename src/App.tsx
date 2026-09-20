@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Navbar } from './components/Navbar';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { UploadScreen } from './components/UploadScreen';
@@ -22,24 +23,46 @@ const INITIAL_HABITS: LifestyleHabits = {
 
 // Determine backend API URL (supports both web and native Capacitor on Android)
 const getApiBaseUrl = (): string => {
-  // If explicitly provided via VITE_API_URL (e.g. injected during APK build)
-  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== '') {
-    return import.meta.env.VITE_API_URL.replace(/\/+$/, '');
+  // 1. If explicitly provided via VITE_API_URL (e.g. injected during APK build or environment)
+  if (import.meta.env.VITE_API_URL && typeof import.meta.env.VITE_API_URL === 'string' && import.meta.env.VITE_API_URL.trim() !== '') {
+    return import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '');
   }
 
-  // Check if running inside native Android/iOS Capacitor environment
-  const isCapacitorNative =
-    typeof (window as any).Capacitor !== 'undefined' &&
-    typeof (window as any).Capacitor.isNativePlatform === 'function' &&
-    (window as any).Capacitor.isNativePlatform();
-
-  if (isCapacitorNative) {
-    // When running inside the native APK, relative URLs (/api/...) will fail because
-    // the WebView runs on https://localhost. Default to the production Cloudflare Worker URL.
-    return 'https://futureme.m-shahraiz774.workers.dev';
+  // 2. Check if running inside native Android/iOS Capacitor environment via official @capacitor/core API
+  try {
+    if (Capacitor.isNativePlatform() || Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios') {
+      return 'https://futureme.m-shahraiz774.workers.dev';
+    }
+  } catch {
+    // ignore
   }
 
-  // Same-origin relative path for Web (AI Studio preview or production web deployment)
+  // 3. Fallback checks for WebView / Capacitor runtime environment
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin || '';
+    const hostname = window.location.hostname || '';
+    const port = window.location.port || '';
+    const protocol = window.location.protocol || '';
+
+    // Capacitor on Android serves from https://localhost (with no dev port or 443/80) or capacitor://
+    if (
+      protocol === 'capacitor:' ||
+      protocol === 'ionic:' ||
+      origin.startsWith('capacitor://') ||
+      origin.startsWith('ionic://') ||
+      (hostname === 'localhost' && (!port || port === '80' || port === '443'))
+    ) {
+      return 'https://futureme.m-shahraiz774.workers.dev';
+    }
+
+    // Android WebView user-agent check on localhost
+    const ua = navigator.userAgent || '';
+    if ((ua.includes('wv') || ua.includes('Android')) && (hostname === 'localhost' || !hostname)) {
+      return 'https://futureme.m-shahraiz774.workers.dev';
+    }
+  }
+
+  // 4. Same-origin relative path for Web (AI Studio preview or production web deployment)
   return '';
 };
 
